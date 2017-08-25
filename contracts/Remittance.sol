@@ -5,7 +5,8 @@ contract Remittance {
     
     struct LockInfo {
         uint amount;
-        bytes32 pw1pw2Hash;
+        address exchangeShop;
+        bytes32 pw1pHash;
         uint deadline;
     }
     
@@ -16,7 +17,7 @@ contract Remittance {
         owner = msg.sender;
     }
     
-    function registerLockInfo(bytes32 _pw1Hash, bytes32 _pw2Hash, uint deadlineDuration)
+    function registerLockInfo(address _exchangeShop, bytes32 _pw1Hash, uint deadlineDuration)
         public
         payable
         returns (bool)
@@ -24,25 +25,26 @@ contract Remittance {
         if (msg.value == 0) throw;
         require(lockInfos[msg.sender].amount == 0);
         
-        lockInfos[msg.sender].pw1pw2Hash = keccak256(_pw1Hash, _pw2Hash);
         lockInfos[msg.sender].amount = msg.value;
+        lockInfos[msg.sender].exchangeShop = _exchangeShop;
+        lockInfos[msg.sender].pw1pHash = _pw1Hash;
         lockInfos[msg.sender].deadline = block.number + deadlineDuration;
         
         return true;
     }
     
-    function unlockEther(bytes32 _pw1Hash, bytes32 _pw2Hash, address payer)
+    function unlockEther(bytes32 pw1, address payer)
         public
         payable
         returns (bool)
     {
         require(lockInfos[payer].amount > 0);
-        bytes32 combinedHash = keccak256(_pw1Hash, _pw2Hash);
+        require(msg.sender == lockInfos[payer].exchangeShop);
+        require(keccak256(pw1) == lockInfos[payer].pw1Hash);
 
-        require(lockInfos[payer].pw1pw2Hash == combinedHash);
-
-        if (!msg.sender.send(lockInfos[payer].amount)) throw;
+        uint amount = lockInfos[payer].amount;
         lockInfos[payer].amount = 0;
+        msg.sender.transfer(amount);
         
         return true;
     }
@@ -52,16 +54,10 @@ contract Remittance {
         require (lockInfos[msg.sender].deadline < block.number);
  
         uint amountToRefund = lockInfos[msg.sender].amount;
-        
-        msg.sender.transfer(amountToRefund);
         lockInfos[msg.sender].amount = 0;
+        msg.sender.transfer(amountToRefund);
         
         return true;
     }
-    
-    function getHash(string pw) public constant returns(bytes32) {
-        return keccak256(pw);
-    }
-    
     
 }
